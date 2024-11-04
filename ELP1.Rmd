@@ -1,0 +1,250 @@
+---
+title: "ELP1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(readr)
+library(readxl)
+library(httr)
+library(tidyverse)
+library(R.utils)
+library(patchwork)
+```
+
+## R Markdown
+
+```{r import data}
+#Import gnomAD v4, filtering for canonical transcripts and rearranging in descending order for LOEUF
+v4 <- read_tsv("https://storage.googleapis.com/gcp-public-data--gnomad/release/4.1/constraint/gnomad.v4.1.constraint_metrics.tsv") %>% filter(canonical == "TRUE") %>% arrange(desc(lof.oe_ci.upper)) %>%  distinct(gene, .keep_all = T)
+
+# Convert `gene` to a factor with levels in the order of `lof.oe_ci.upper`
+v4$gene <- factor(v4$gene, levels = unique(v4$gene))
+
+# Define the URL and destination file names
+url <- "https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz"
+destfile <- "v2.txt.bgz"
+txt_file <- "v2.txt"
+
+# Download the file
+GET(url, write_disk(destfile, overwrite = TRUE))
+
+# Read the decompressed .txt file ##OBS HER BRUGER JEG ANDEN VARIABLE TIL AT ARRANGE, OG DER ER INGEN VARIABLE DER HEDE "CANONICAL"
+v2 <- read.table(txt_file, header = TRUE, sep = "\t") %>%  mutate(gene = if_else(gene == "IKBKAP", "ELP1", gene)) %>% arrange(desc(oe_lof_upper)) %>%  distinct(gene, .keep_all = T)
+v2$gene <- factor(v2$gene, levels = unique(v2$gene))
+
+##Supplementary data sheet 3 from Nat Com article
+# Define the URL of the Excel file
+url <- "https://static-content.springer.com/esm/art%3A10.1038%2Fs41467-024-45975-9/MediaObjects/41467_2024_45975_MOESM4_ESM.xlsx"
+
+# Create a temporary file to store the downloaded Excel file
+destfile <- tempfile(fileext = ".xlsx")
+
+# Download the file from the URL to the temporary location
+GET(url, write_disk(destfile, overwrite = TRUE))
+
+# List all sheet names in the Excel file
+sheet_names <- excel_sheets(destfile)
+
+# Initialize an empty list to store the data frames
+sheet_list <- list()
+
+# Loop through each sheet name and read the sheet into a data frame
+for (sheet in sheet_names) {
+  sheet_data <- read_excel(destfile, sheet = sheet)
+  sheet_list[[sheet]] <- sheet_data
+}
+
+#extract sheet 3 from the excel workbook and filter for the AD LoF and XLR monoallelic pCPS genes
+suppdata_3 <- sheet_list$`Supplementary Data 3` %>% filter(`ADDED: LoF vs GoF` == "XLR" | `ADDED: LoF vs GoF` == "AD (LoF)"  )
+
+# a string of said genes
+pCPSgenes <- suppdata_3$gene
+```
+
+```{r dotplotV2}
+v2 <- v2 %>%
+  mutate(color = factor(case_when(
+    gene %in% c("PTCH1", "SUFU", "APC", "TP53") ~ "green",
+    gene == "ELP1" ~ "purple",
+    gene %in% pCPSgenes ~ "red",
+    TRUE ~ "grey"
+)))#
+
+v2$color <- factor(v2$color, levels = c("green", "purple", "red", "grey"))
+
+# Define colors for the plot
+colors <- c("red" = "red", "grey" = "grey", "green"="green", "purple"="purple")
+color_labels <- c("red" = "pCPS genes", "grey" = "Normal Genes", "green"="MBSHH disposition genes", "purple" ="ELP1")
+
+
+v2 <- v2 %>%
+  mutate(size = ifelse(gene %in% pCPSgenes, 3, 0.3))  # Adjust size as needed
+v2 <- v2 %>%
+  mutate(size = case_when(
+    gene %in% c("PTCH1", "SUFU", "APC", "TP53") ~ 4,
+    gene == "ELP1" ~ 5,
+    gene %in% pCPSgenes ~ 2.5,
+    TRUE ~ 0.3
+  ))
+
+#
+#
+## Create the dot plot
+#plotV2 <- ggplot(v2, aes(x = gene, y =oe_lof_upper, color = color, size = size, legend = " ")) +
+#  geom_point() +
+#  scale_color_manual(values = colors, breaks = c  ("red","grey","green","purple"), labels = color_labels, name = " ") +
+#  scale_size_continuous(range = c(0.1, 5)) +
+#  labs(x = "", y = "LOEUF", ) +
+#  theme_classic() +
+#  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none")+
+#  geom_hline(yintercept = 0.35, linetype = "dotted")+
+#  guides(size='none')
+#plotV2
+```
+
+
+```{r dotplotV4 and combine}
+v4 <- v4 %>%
+  mutate(color = factor(case_when(
+    gene %in% c("PTCH1", "SUFU", "APC", "TP53") ~ "green",
+    gene == "ELP1" ~ "purple",
+    gene %in% pCPSgenes ~ "red",
+    TRUE ~ "grey"
+  )))
+
+v4$color <- factor(v4$color, levels = c("green", "purple", "red", "grey"))
+
+# Define colors for the plot
+colors <- c("red" = "red", "grey" = "grey", "green"="green", "purple"="purple")
+color_labels <- c("red" = "pCPS genes", "grey" = "Normal Genes", "green"="MBSHH disposition genes", "purple" ="ELP1")
+
+v4 <- v4 %>%
+  mutate(size = ifelse(gene %in% pCPSgenes, 3, 0.3))  # Adjust size as needed
+v4 <- v4 %>%
+  mutate(size = case_when(
+    gene %in% c("PTCH1", "SUFU", "APC", "TP53") ~ 4,
+    gene == "ELP1" ~ 5,
+    gene %in% pCPSgenes ~ 2.5,
+    TRUE ~ 0.3
+  ))
+
+#
+#
+# Create the dot plot
+#plotV4 <- ggplot(v4, aes(x = gene, y =lof.oe_ci.upper, color = color, size = size, legend = " ")) +
+#  geom_point() +
+#  scale_color_manual(values = colors, breaks = c  ("red","grey","green","purple"), labels = color_labels, name = " ") +
+#  scale_size_continuous(range = c(0.1, 5)) +
+#  labs(x = "Gene", y = "LOEUF", ) +
+#  theme_classic() +
+#  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+#  geom_hline(yintercept = 0.35, linetype = "dotted")+
+#  guides(size=F)
+#plotV4
+#
+#combined_patchwork <- (plotV2 / plotV4) +
+#  plot_annotation(title = "Genetic constraint", tag_levels = 'A') +
+#  plot_layout(heights = c(1, 1), guides="collect")
+#
+#ggsave("combined_patchwork.png", plot = combined_patchwork, width = 14, height = 10, dpi = 300)
+#
+```
+
+```{r observes vs expected pLoF in V2 and V4}
+#gnomAD v2.1.1
+v2_mbshhgenes <- v2%>% 
+  filter(gene=="ELP1" |gene=="SUFU" |gene== "PTCH1" | gene=="TP53" | gene=="APC") %>% #select MBSHH genes
+  select(gene, obs_lof, exp_lof, oe_lof) %>% #select LOE relevant variables
+  mutate(LOE=obs_lof/exp_lof) #validation of LOE
+v2_mbshhgenes #display results
+
+#repeat below for gnomAD v4.1.0
+v4_mbshhgenes <- v4%>%
+  filter(gene=="ELP1" |gene=="SUFU" |gene== "PTCH1" | gene=="TP53" | gene=="APC") %>%
+  select(gene, lof.obs, lof.exp, lof.oe) %>%
+  mutate(LOE=lof.obs/lof.exp) 
+v4_mbshhgenes
+```
+
+```{r chi-square comparison}
+#observed LOF for ELP1
+EL1v4_obs <- round(v4_mbshhgenes$lof.obs[1],0)
+#observed LOF for non-ELP1 MBB genes
+nonELP1v4_obs <- round(sum(v4_mbshhgenes$lof.obs[2:5]),0)
+#expected LOF for ELP1
+EL1v4_exp <- round(v4_mbshhgenes$lof.exp[1],0)
+#expected LOF for non-ELP1 MBB genes
+nonELP1v4_exp <- round(sum(v4_mbshhgenes$lof.exp[2:5]),0)
+
+
+#create 2x2 table
+
+ObsvExp <- matrix(c(EL1v4_obs, nonELP1v4_obs, EL1v4_exp, nonELP1v4_exp), nrow=2)
+colnames(ObsvExp) <- c("Observed", "Expected")
+rownames(ObsvExp) <- c("ELP1", "SUFU+PTCH1+APC+TP53")
+addmargins(ObsvExp)
+
+chi_square_result <- chisq.test(ObsvExp)
+print(chi_square_result)
+```
+
+
+```{r test nye plots}
+colors <- c(
+    "All other genes" = "#073b4c",
+    "pCPS" = "#ffd166",
+    "MBSHH disposing genes" = "#06d6a0",
+    "ELP1" = "#ef476f"
+  )
+
+
+plot1 <-  ggplot() +
+  geom_dotplot(data=v4 %>% filter(color=="grey"), aes(x=lof.oe_ci.upper), binwidth = 0.008, fill="#073b4c", color="#073b4c")+
+  geom_vline(xintercept = 0.35, color="blue", linetype = "dotted", linewidth = 2) +
+  geom_dotplot(data=v4 %>% filter(color=="red"), aes(x=lof.oe_ci.upper), binwidth = 0.03, fill="#ffd166", color="#ffd166")+  #53 pCPS
+  geom_dotplot(data=v4 %>% filter(color=="green"), aes(x=lof.oe_ci.upper), binwidth = 0.03, fill="#06d6a0", color="#06d6a0")+ #MBSHH
+  geom_dotplot(data=v4 %>% filter(color=="purple"), aes(x=lof.oe_ci.upper), binwidth = 0.03, fill="#ef476f", color="#ef476f")+#ELP1
+  theme_classic() +
+  labs(x="LOEUF", title=" ", subtitle="A")+
+  theme(axis.title.y = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.line.y=element_blank(),
+    axis.text = element_text(size = 28),
+    axis.title = element_text(size = 32),
+    plot.subtitle = element_text(size = 32))
+plot1
+
+
+plot2 <- ggplot()+
+  geom_point(data=v4 %>% filter(color=="grey"), aes(x=lof.exp, y=lof.obs), fill="#073b4c", color="#073b4c")+
+  geom_point(data=v4 %>% filter(color=="red"), aes(x=lof.exp, y=lof.obs), fill="#ffd166", color="#ffd166", size=3)+  #53 pCPS
+  geom_point(data=v4 %>% filter(color=="green"), aes(x=lof.exp, y=lof.obs), fill="#06d6a0", color="#06d6a0", size=3)+ #MBSHH
+  geom_point(data=v4 %>% filter(color=="purple"), aes(x=lof.exp, y=lof.obs), fill="#ef476f", color="#ef476f", size=3)+#ELP1
+  geom_abline(slope=1, intercept = 0, color = "blue", linetype="dotted", size=2) +
+  theme_classic()+
+  scale_x_continuous(breaks = c(0,100,200,300,400,500), limits = c(0,500))+
+  scale_y_continuous(breaks = c(0, 100, 200, 300, 400, 500), limits = c(0,500))+
+  labs(x="Expected pLoF", y="Observed pLoF", subtitle="B")+
+  theme(axis.text = element_text(size = 28),
+    axis.title = element_text(size = 32),
+    plot.subtitle = element_text(size = 32))+
+  scale_color_manual(values=colors)
+plot2
+
+fig1 <- (plot1 + plot2)# +
+  #plot_annotation(title = "Genetic constraint", tag_levels = 'A') +
+ # plot_layout(heights = c(1, 1), guides="collect")
+
+ggsave("fig1.png", plot = fig1, width = 20, height = 10, dpi = 600)
+```
+
+```{r genes not found in V4.1.0}
+pCPSgenes
+
+v4genes <- v4 %>% filter(gene %in% pCPSgenes) %>% select(gene) 
+
+diff2 <- setdiff(pCPSgenes, v4genes$gene)
+print(diff2)
+```
+
