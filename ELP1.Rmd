@@ -26,13 +26,12 @@ v4$gene <- factor(v4$gene, levels = unique(v4$gene))
 # Define the URL and destination file names
 url <- "https://storage.googleapis.com/gcp-public-data--gnomad/release/2.1.1/constraint/gnomad.v2.1.1.lof_metrics.by_gene.txt.bgz"
 destfile <- "v2.txt.bgz"
-txt_file <- "v2.txt"
 
 # Download the file
 GET(url, write_disk(destfile, overwrite = TRUE))
 
 # Read the decompressed .txt file ##OBS HER BRUGER JEG ANDEN VARIABLE TIL AT ARRANGE, OG DER ER INGEN VARIABLE DER HEDE "CANONICAL"
-v2 <- read.table(txt_file, header = TRUE, sep = "\t") %>%  mutate(gene = if_else(gene == "IKBKAP", "ELP1", gene)) %>% arrange(desc(oe_lof_upper)) %>%  distinct(gene, .keep_all = T)
+v2 <- read.table(destfile, header = TRUE, sep = "\t") %>%  mutate(gene = if_else(gene == "IKBKAP", "ELP1", gene)) %>% arrange(desc(oe_lof_upper)) %>%  distinct(gene, .keep_all = T)
 v2$gene <- factor(v2$gene, levels = unique(v2$gene))
 
 ##Supplementary data sheet 3 from Nat Com article
@@ -89,20 +88,6 @@ v2 <- v2 %>%
     gene %in% pCPSgenes ~ 2.5,
     TRUE ~ 0.3
   ))
-
-#
-#
-## Create the dot plot
-#plotV2 <- ggplot(v2, aes(x = gene, y =oe_lof_upper, color = color, size = size, legend = " ")) +
-#  geom_point() +
-#  scale_color_manual(values = colors, breaks = c  ("red","grey","green","purple"), labels = color_labels, name = " ") +
-#  scale_size_continuous(range = c(0.1, 5)) +
-#  labs(x = "", y = "LOEUF", ) +
-#  theme_classic() +
-#  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position = "none")+
-#  geom_hline(yintercept = 0.35, linetype = "dotted")+
-#  guides(size='none')
-#plotV2
 ```
 
 
@@ -130,27 +115,6 @@ v4 <- v4 %>%
     gene %in% pCPSgenes ~ 2.5,
     TRUE ~ 0.3
   ))
-
-#
-#
-# Create the dot plot
-#plotV4 <- ggplot(v4, aes(x = gene, y =lof.oe_ci.upper, color = color, size = size, legend = " ")) +
-#  geom_point() +
-#  scale_color_manual(values = colors, breaks = c  ("red","grey","green","purple"), labels = color_labels, name = " ") +
-#  scale_size_continuous(range = c(0.1, 5)) +
-#  labs(x = "Gene", y = "LOEUF", ) +
-#  theme_classic() +
-#  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
-#  geom_hline(yintercept = 0.35, linetype = "dotted")+
-#  guides(size=F)
-#plotV4
-#
-#combined_patchwork <- (plotV2 / plotV4) +
-#  plot_annotation(title = "Genetic constraint", tag_levels = 'A') +
-#  plot_layout(heights = c(1, 1), guides="collect")
-#
-#ggsave("combined_patchwork.png", plot = combined_patchwork, width = 14, height = 10, dpi = 300)
-#
 ```
 
 ```{r observes vs expected pLoF in V2 and V4}
